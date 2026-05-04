@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <meta name="theme-color" content="#4c3aaf"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>FinanceMe v6.4</title>
+<title>FinanceMe v6.5</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--bg:#0f0c2e;--card:#1a1540;--card2:#221e52;--border:#2e2a6e;--a1:#7c4dff;--a2:#2979ff;--green:#00e5a0;--red:#ff5c7a;--yellow:#ffd740;--text:#e8e4ff;--muted:#9e96cc;--nav:#1a1540}
@@ -332,7 +332,7 @@ h2{font-size:15px;font-weight:600;margin-bottom:11px}
   </div>
 </div>
 
-<div class="ver">v6.4</div>
+<div class="ver">v6.5</div>
 
 <nav id="main-nav">
   <button class="active" onclick="showPage('dashboard',this)">
@@ -718,30 +718,10 @@ window.askAI=async()=>{
   responseDiv.innerHTML='<div class="advice-bubble"><div class="ai-label">Analizando...</div><div class="ai-loading"><div class="spinner"></div>Procesando tus finanzas...</div></div>';
   const inc=TXS.filter(t=>t.tipo==='ingreso').reduce((s,t)=>s+parseFloat(t.monto),0);
   const exp=TXS.filter(t=>t.tipo==='gasto').reduce((s,t)=>s+parseFloat(t.monto),0);
-  const cats={};TXS.filter(t=>t.tipo==='gasto').forEach(t=>{const k=t.categoria_personalizada||t.categorias?.nombre||'Otro';cats[k]=(cats[k]||0)+parseFloat(t.monto);});
-  const debtSummary=DEBTS.map(d=>`${d.nombre}: debe ${fmt(d.monto_total-d.monto_pagado)}, límite día ${d.fecha_limite}`).join(', ')||'Sin deudas';
-  const catSummary=Object.entries(cats).map(([k,v])=>`${k}: ${fmt(v)}`).join(', ')||'Sin gastos registrados';
-  const systemPrompt=`Eres un asesor financiero personal amigable y experto. El usuario tiene estos datos financieros: Ingresos totales: ${fmt(inc)}, Gastos totales: ${fmt(exp)}, Balance neto: ${fmt(inc-exp)}. Gastos por categoría: ${catSummary}. Deudas: ${debtSummary}. Responde SIEMPRE en español, de forma clara, práctica y motivadora. Máximo 150 palabras. Si no hay datos suficientes, pide al usuario que registre sus transacciones primero.`;
-  try{
-    // Usar cors-anywhere como proxy para Anthropic API
-    const res=await fetch('https://api.allorigins.win/raw?url='+encodeURIComponent('https://api.anthropic.com/v1/messages'),{
-      method:'POST',
-      headers:{'Content-Type':'application/json','x-api-key':'','anthropic-version':'2023-06-01'},
-      body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:300,system:systemPrompt,messages:[{role:'user',content:question}]})
-    });
-    if(!res.ok)throw new Error('API error');
-    const data=await res.json();
-    const text=data.content?.[0]?.text;
-    if(text){
-      responseDiv.innerHTML=`<div class="advice-bubble"><div class="ai-label">💡 Tu Asesor IA</div>${text.replace(/\n/g,'<br>')}</div>`;
-    } else {
-      throw new Error('Sin respuesta');
-    }
-  }catch(err){
-    // Fallback: consejos basados en los datos sin IA externa
-    const advice=generateLocalAdvice(inc,exp,DEBTS,question);
+  const advice=generateLocalAdvice(inc,exp,DEBTS,question);
+  setTimeout(()=>{
     responseDiv.innerHTML=`<div class="advice-bubble"><div class="ai-label">💡 Análisis Financiero</div>${advice}</div>`;
-  }
+  },800);
 };
 
 function generateLocalAdvice(inc,exp,debts,question){
@@ -786,10 +766,20 @@ function renderDashboard(){
   const si=$('s-inc'),se=$('s-exp'),ss=$('s-sav'),sa=$('s-acct'),tb=document.querySelector('.topbar h1');
   if(!si)return;
   si.textContent=fmt(inc);se.textContent=fmt(exp);ss.textContent=fmt(inc-exp);sa.textContent=ACCOUNTS.length;
-  const recent=f.slice(0,5);const icons={ingreso:'💰',gasto:'💸',transfer:'🔄'};
+  const recent=f.slice(0,5);
+  const icons={ingreso:'💰',gasto:'💸',transfer:'🔄'};
   $('recent-list').innerHTML=recent.length?recent.map(t=>{
-    const isInc=t.tipo==='ingreso',isTrf=t.tipo==='transfer';
-    return`<div class="tx-item"><div class="tx-icon ${isInc?'inc':isTrf?'trf':'exp'}">${icons[t.tipo]||'💱'}</div><div class="tx-info"><div class="tx-name">${t.descripcion}</div><div class="tx-sub">${t.fecha}${t.categorias?.nombre?' · '+t.categorias.nombre:t.categoria_personalizada?' · '+t.categoria_personalizada:''}</div></div><div class="tx-amt ${isInc?'inc':isTrf?'trf':'exp'}">${isInc?'+':'−'}${fmt(t.monto)}</div></div>`;
+    const isInc=t.tipo==='ingreso',isExp=t.tipo==='gasto',isTrf=t.tipo==='transfer';
+    const sign=isInc?'+':isExp?'−':'⇄';
+    const cls=isInc?'inc':isExp?'exp':'trf';
+    return`<div class="tx-item">
+      <div class="tx-icon ${cls}">${icons[t.tipo]||'💱'}</div>
+      <div class="tx-info">
+        <div class="tx-name">${t.descripcion}</div>
+        <div class="tx-sub">${t.fecha}${t.categorias?.nombre?' · '+t.categorias.nombre:t.categoria_personalizada?' · '+t.categoria_personalizada:isTrf?' · Transferencia':''}</div>
+      </div>
+      <div class="tx-amt ${cls}">${sign}${fmt(t.monto)}</div>
+    </div>`;
   }).join(''):'<div class="empty">Sin transacciones en este período</div>';
   buildBar(f);buildLine(f);buildDonut(f);
 }
