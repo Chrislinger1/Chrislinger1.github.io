@@ -769,14 +769,17 @@ function renderDashboard(){
   const recent=f.slice(0,5);
   const icons={ingreso:'💰',gasto:'💸',transfer:'🔄'};
   $('recent-list').innerHTML=recent.length?recent.map(t=>{
-    const isInc=t.tipo==='ingreso',isExp=t.tipo==='gasto',isTrf=t.tipo==='transfer';
-    const sign=isInc?'+':isExp?'−':'⇄';
-    const cls=isInc?'inc':isExp?'exp':'trf';
+    const isInc=t.tipo==='ingreso';
+    const isExtTrf=t.tipo==='transfer'&&t.es_externa;
+    const isTrf=t.tipo==='transfer'&&!t.es_externa;
+    const sign=isInc?'+':isExtTrf?'−':'⇄';
+    const cls=isInc?'inc':isExtTrf?'exp':'trf';
+    const label=isExtTrf?`→ ${t.nombre_externo||'Externo'}`:isTrf?'Transferencia interna':'';
     return`<div class="tx-item">
-      <div class="tx-icon ${cls}">${icons[t.tipo]||'💱'}</div>
+      <div class="tx-icon ${cls}">${isExtTrf?'💸':icons[t.tipo]||'💱'}</div>
       <div class="tx-info">
         <div class="tx-name">${t.descripcion}</div>
-        <div class="tx-sub">${t.fecha}${t.categorias?.nombre?' · '+t.categorias.nombre:t.categoria_personalizada?' · '+t.categoria_personalizada:isTrf?' · Transferencia':''}</div>
+        <div class="tx-sub">${t.fecha}${t.categorias?.nombre?' · '+t.categorias.nombre:t.categoria_personalizada?' · '+t.categoria_personalizada:label?' · '+label:''}</div>
       </div>
       <div class="tx-amt ${cls}">${sign}${fmt(t.monto)}</div>
     </div>`;
@@ -784,9 +787,20 @@ function renderDashboard(){
   buildBar(f);buildLine(f);buildDonut(f);
 }
 function monthly(txs){
-  const m={};txs.forEach(t=>{const k=t.fecha.substring(0,7);if(!m[k])m[k]={inc:0,exp:0};if(t.tipo==='ingreso')m[k].inc+=parseFloat(t.monto);if(t.tipo==='gasto')m[k].exp+=parseFloat(t.monto);});
+  const m={};
+  txs.forEach(t=>{
+    const k=t.fecha.substring(0,7);
+    if(!m[k])m[k]={inc:0,exp:0};
+    if(t.tipo==='ingreso')m[k].inc+=parseFloat(t.monto);
+    if(t.tipo==='gasto')m[k].exp+=parseFloat(t.monto);
+    if(t.tipo==='transfer'&&t.es_externa)m[k].exp+=parseFloat(t.monto);
+  });
   const keys=Object.keys(m).sort().slice(-6);
-  return{labels:keys.map(k=>{const[y,mo]=k.split('-');return MSHORT[parseInt(mo)-1]+' '+y.slice(2)}),inc:keys.map(k=>+m[k].inc.toFixed(2)),exp:keys.map(k=>+m[k].exp.toFixed(2))};
+  return{
+    labels:keys.map(k=>{const[y,mo]=k.split('-');return MSHORT[parseInt(mo)-1]+' '+y.slice(2)}),
+    inc:keys.map(k=>+m[k].inc.toFixed(2)),
+    exp:keys.map(k=>+m[k].exp.toFixed(2))
+  };
 }
 function buildBar(txs){const d=monthly(txs),ctx=$('chart-bar').getContext('2d');if(barC)barC.destroy();barC=new Chart(ctx,{type:'bar',data:{labels:d.labels.length?d.labels:['Sin datos'],datasets:[{label:'Ingresos',data:d.inc.length?d.inc:[0],backgroundColor:'#00e5a055',borderColor:'#00e5a0',borderWidth:1.5,borderRadius:5},{label:'Gastos',data:d.exp.length?d.exp:[0],backgroundColor:'#ff5c7a55',borderColor:'#ff5c7a',borderWidth:1.5,borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#9e96cc',font:{size:10}},grid:{color:'#ffffff08'}},y:{ticks:{color:'#9e96cc',font:{size:10},callback:v=>'$'+v},grid:{color:'#ffffff08'}}}}});}
 function buildLine(txs){const d=monthly(txs),ctx=$('chart-line').getContext('2d');if(lineC)lineC.destroy();const sav=d.inc.map((v,i)=>+(v-d.exp[i]).toFixed(2));lineC=new Chart(ctx,{type:'line',data:{labels:d.labels.length?d.labels:['Sin datos'],datasets:[{data:sav.length?sav:[0],borderColor:'#7c4dff',backgroundColor:'#7c4dff22',fill:true,tension:0.4,pointBackgroundColor:'#7c4dff',pointRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#9e96cc',font:{size:10}},grid:{color:'#ffffff08'}},y:{ticks:{color:'#9e96cc',font:{size:10},callback:v=>'$'+v},grid:{color:'#ffffff08'}}}}});}
