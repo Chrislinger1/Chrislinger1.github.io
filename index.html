@@ -454,7 +454,30 @@ SB.auth.onAuthStateChange(async(event,session)=>{
       initDateSelects();initDaySelects();buildPalettes();loadTheme();
       showApp();renderDashboard();
     }catch(err){console.error(err);showApp();}
-  } else showLogin();
+  } else {
+    USER=null;
+    showLogin();
+  }
+});
+
+// FIX: Refresca sesión cuando la app vuelve al primer plano
+document.addEventListener('visibilitychange',async()=>{
+  if(document.visibilityState==='visible'){
+    try{
+      const{data:{session},error}=await SB.auth.getSession();
+      if(error||!session){
+        USER=null;
+        $('main-app').style.display='none';
+        showLogin();
+        return;
+      }
+      const{data:{session:refreshed}}=await SB.auth.refreshSession();
+      if(refreshed?.user){
+        USER=refreshed.user;
+        document.querySelectorAll('button[disabled]').forEach(b=>b.disabled=false);
+      }
+    }catch(e){console.warn('visibilitychange session check:',e);}
+  }
 });
 
 // DATA
@@ -842,9 +865,3 @@ window.exportCSV=()=>{
 </script>
 </body>
 </html>
-
-
-
-
-
-
