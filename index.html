@@ -433,25 +433,15 @@ window.loginGoogle=async()=>{
   if(error)alert('Error: '+error.message);
 };
 window.logout=async()=>{
-  // Limpiar estado local inmediatamente sin esperar red
+  // Limpiar estado local de inmediato, sin esperar red
   USER=null;WALLETS=[];CW=null;ACCOUNTS=[];TXS=[];DEBTS=[];
   $('main-app').style.display='none';
   showLogin();
-  // SignOut en background, no bloqueante
+  // SignOut en background sin bloquear UI
   try{
-    const tout=new Promise((_,r)=>setTimeout(()=>r('timeout'),2000));
-    await Promise.race([SB.auth.signOut(),tout]);
-  }catch(e){console.warn('signOut background:',e);}
+    await Promise.race([SB.auth.signOut(),new Promise((_,r)=>setTimeout(()=>r(),2000))]);
+  }catch(e){console.warn('signOut:',e);}
 };
-
-// HELPER: verificar sesión antes de cualquier acción crítica
-async function checkSession(){
-  try{
-    const res=await Promise.race([SB.auth.getSession(),new Promise((_,r)=>setTimeout(()=>r(null),3000))]);
-    if(!res?.data?.session){USER=null;$('main-app').style.display='none';showLogin();return false;}
-    USER=res.data.session.user;return true;
-  }catch(e){return false;}
-}
 
 // INIT
 const isGoogleCb=window.location.hash.includes('access_token');
@@ -468,18 +458,17 @@ SB.auth.onAuthStateChange(async(event,session)=>{
       initDateSelects();initDaySelects();buildPalettes();loadTheme();
       showApp();renderDashboard();
     }catch(err){console.error(err);showApp();}
-  } else {USER=null;showLogin();}
+  } else {
+    // Solo mostrar login si la app está visible (evita logout falso en background)
+    if(document.visibilityState==='visible')showLogin();
+  }
 });
 
-// FIX: Refresca sesión cuando la app vuelve al primer plano
+// Re-habilitar botones al volver al primer plano (sin cerrar sesión)
 document.addEventListener('visibilitychange',async()=>{
   if(document.visibilityState==='visible'&&$('main-app').style.display!=='none'){
-    try{
-      const res=await Promise.race([SB.auth.getSession(),new Promise(r=>setTimeout(()=>r(null),3000))]);
-      if(!res?.data?.session){USER=null;$('main-app').style.display='none';showLogin();return;}
-      USER=res.data.session.user;
-      document.querySelectorAll('button[disabled]').forEach(b=>b.disabled=false);
-    }catch(e){console.warn('visibility check:',e);}
+    // Solo re-habilitar botones deshabilitados, no tocar la sesión
+    document.querySelectorAll('button[disabled]').forEach(b=>b.disabled=false);
   }
 });
 
@@ -518,7 +507,6 @@ async function loadDebts(){const{data}=await SB.from('deudas').select('*').eq('c
 
 // WALLETS
 window.createWallet=async()=>{
-  if(!await checkSession())return;
   const name=$('new-wallet-name').value.trim();
   if(!name)return alert('Escribe el nombre');
   const{data:{session}}=await SB.auth.getSession();
@@ -564,7 +552,6 @@ function populateShareWalletSelect(){const sel=$('share-wallet-select');sel.inne
 
 // ACCOUNTS
 window.addAccount=async()=>{
-  if(!await checkSession())return;
   if(!CW)return alert('Selecciona una cartera primero');
   const name=$('a-name').value.trim(),bal=parseFloat($('a-balance').value)||0,type=$('a-type').value;
   if(!name)return alert('Escribe el nombre');
@@ -626,7 +613,6 @@ function initDaySelects(){
 
 // TRANSACTIONS
 window.addTx=async(type)=>{
-  if(!await checkSession())return;
   if(!CW)return alert('Selecciona una cartera');
   if(type==='transfer'){
     const lbl=$('t-label').value.trim()||'Transferencia',amt=parseFloat($('t-amount').value);
@@ -682,7 +668,6 @@ window.renderTxList=()=>{
 
 // DEBTS
 window.addDebt=async()=>{
-  if(!await checkSession())return;
   if(!CW)return alert('Selecciona una cartera');
   const name=$('d-name').value.trim(),total=parseFloat($('d-total').value);
   const paid=parseFloat($('d-paid').value)||0,interest=parseFloat($('d-interest').value)||0;
