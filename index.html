@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <meta name="theme-color" content="#4c3aaf"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>FinanceMe v6.9</title>
+<title>FinanceMe v7.0</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--bg:#0f0c2e;--card:#1a1540;--card2:#221e52;--border:#2e2a6e;--a1:#7c4dff;--a2:#2979ff;--green:#00e5a0;--red:#ff5c7a;--yellow:#ffd740;--text:#e8e4ff;--muted:#9e96cc;--nav:#1a1540}
@@ -332,7 +332,7 @@ h2{font-size:15px;font-weight:600;margin-bottom:11px}
   </div>
 </div>
 
-<div class="ver">v6.9</div>
+<div class="ver">v7.0</div>
 
 <nav id="main-nav">
   <button class="active" onclick="showPage('dashboard',this)">
@@ -433,11 +433,25 @@ window.loginGoogle=async()=>{
   if(error)alert('Error: '+error.message);
 };
 window.logout=async()=>{
-  if(!confirm('¿Cerrar sesión?'))return;
-  await SB.auth.signOut();
-  USER=null;WALLETS=[];CW=null;ACCOUNTS=[];TXS=[];
-  $('main-app').style.display='none';showLogin();
+  // Limpiar estado local inmediatamente sin esperar red
+  USER=null;WALLETS=[];CW=null;ACCOUNTS=[];TXS=[];DEBTS=[];
+  $('main-app').style.display='none';
+  showLogin();
+  // SignOut en background, no bloqueante
+  try{
+    const tout=new Promise((_,r)=>setTimeout(()=>r('timeout'),2000));
+    await Promise.race([SB.auth.signOut(),tout]);
+  }catch(e){console.warn('signOut background:',e);}
 };
+
+// HELPER: verificar sesión antes de cualquier acción crítica
+async function checkSession(){
+  try{
+    const res=await Promise.race([SB.auth.getSession(),new Promise((_,r)=>setTimeout(()=>r(null),3000))]);
+    if(!res?.data?.session){USER=null;$('main-app').style.display='none';showLogin();return false;}
+    USER=res.data.session.user;return true;
+  }catch(e){return false;}
+}
 
 // INIT
 const isGoogleCb=window.location.hash.includes('access_token');
@@ -454,29 +468,18 @@ SB.auth.onAuthStateChange(async(event,session)=>{
       initDateSelects();initDaySelects();buildPalettes();loadTheme();
       showApp();renderDashboard();
     }catch(err){console.error(err);showApp();}
-  } else {
-    USER=null;
-    showLogin();
-  }
+  } else {USER=null;showLogin();}
 });
 
 // FIX: Refresca sesión cuando la app vuelve al primer plano
 document.addEventListener('visibilitychange',async()=>{
-  if(document.visibilityState==='visible'){
+  if(document.visibilityState==='visible'&&$('main-app').style.display!=='none'){
     try{
-      const{data:{session},error}=await SB.auth.getSession();
-      if(error||!session){
-        USER=null;
-        $('main-app').style.display='none';
-        showLogin();
-        return;
-      }
-      const{data:{session:refreshed}}=await SB.auth.refreshSession();
-      if(refreshed?.user){
-        USER=refreshed.user;
-        document.querySelectorAll('button[disabled]').forEach(b=>b.disabled=false);
-      }
-    }catch(e){console.warn('visibilitychange session check:',e);}
+      const res=await Promise.race([SB.auth.getSession(),new Promise(r=>setTimeout(()=>r(null),3000))]);
+      if(!res?.data?.session){USER=null;$('main-app').style.display='none';showLogin();return;}
+      USER=res.data.session.user;
+      document.querySelectorAll('button[disabled]').forEach(b=>b.disabled=false);
+    }catch(e){console.warn('visibility check:',e);}
   }
 });
 
@@ -515,6 +518,7 @@ async function loadDebts(){const{data}=await SB.from('deudas').select('*').eq('c
 
 // WALLETS
 window.createWallet=async()=>{
+  if(!await checkSession())return;
   const name=$('new-wallet-name').value.trim();
   if(!name)return alert('Escribe el nombre');
   const{data:{session}}=await SB.auth.getSession();
@@ -560,6 +564,7 @@ function populateShareWalletSelect(){const sel=$('share-wallet-select');sel.inne
 
 // ACCOUNTS
 window.addAccount=async()=>{
+  if(!await checkSession())return;
   if(!CW)return alert('Selecciona una cartera primero');
   const name=$('a-name').value.trim(),bal=parseFloat($('a-balance').value)||0,type=$('a-type').value;
   if(!name)return alert('Escribe el nombre');
@@ -621,6 +626,7 @@ function initDaySelects(){
 
 // TRANSACTIONS
 window.addTx=async(type)=>{
+  if(!await checkSession())return;
   if(!CW)return alert('Selecciona una cartera');
   if(type==='transfer'){
     const lbl=$('t-label').value.trim()||'Transferencia',amt=parseFloat($('t-amount').value);
@@ -676,6 +682,7 @@ window.renderTxList=()=>{
 
 // DEBTS
 window.addDebt=async()=>{
+  if(!await checkSession())return;
   if(!CW)return alert('Selecciona una cartera');
   const name=$('d-name').value.trim(),total=parseFloat($('d-total').value);
   const paid=parseFloat($('d-paid').value)||0,interest=parseFloat($('d-interest').value)||0;
