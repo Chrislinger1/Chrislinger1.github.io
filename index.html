@@ -478,8 +478,8 @@ async function loadTxs(){
 async function loadDebts(){const{data}=await SB.from('deudas').select('*').eq('cartera_id',CW.id).order('creado_en',{ascending:false});DEBTS=data||[];}
 async function loadBudget(){
   if(!CW)return;
-  const{data}=await SB.from('presupuestos').select('*').eq('cartera_id',CW.id).eq('tipo','semanal').single();
-  BUDGET=data||null;
+  const{data}=await SB.from('presupuestos').select('*').eq('cartera_id',CW.id).single();
+  if(data){BUDGET={...data,monto:data.monto_limite};}else{BUDGET=null;}
 }
 
 // ── BUDGET - Punto 3 ───────────────────────────────────────────────────────
@@ -487,7 +487,8 @@ window.addBudget=async()=>{
   if(!CW)return alert('Selecciona una cartera');
   const amount=parseFloat($('budget-input').value);
   if(!amount||amount<=0)return alert('Ingresa un monto válido');
-  const{error}=await SB.from('presupuestos').upsert({cartera_id:CW.id,tipo:'semanal',monto:amount,creado_en:new Date().toISOString()},{onConflict:'cartera_id,tipo'});
+  const now=new Date();
+  const{error}=await SB.from('presupuestos').upsert({cartera_id:CW.id,monto_limite:amount,mes:now.getMonth()+1,anio:now.getFullYear()},{onConflict:'cartera_id'});
   if(error)return alert('Error: '+error.message);
   $('budget-input').value='';
   await loadBudget();
@@ -495,7 +496,7 @@ window.addBudget=async()=>{
 };
 window.deleteBudget=async()=>{
   if(!confirm('¿Eliminar presupuesto?'))return;
-  await SB.from('presupuestos').delete().eq('cartera_id',CW.id).eq('tipo','semanal');
+  await SB.from('presupuestos').delete().eq('cartera_id',CW.id);
   BUDGET=null;
   renderBudget();
 };
