@@ -330,13 +330,19 @@ h2{font-size:15px;font-weight:600;margin-bottom:11px}
 import{createClient}from'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 const SB=createClient('https://akpecqkvlwolbwmxfxaf.supabase.co','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFrcGVjcWt2bHdvbGJ3bXhmeGFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1NTM2NTcsImV4cCI6MjA5MzEyOTY1N30.h6EpZLHvYWGgBdeQlS1r0_LPEyBZrzsja7qh476AEvQ');
 
-// CONSOLE CLEANUP - Punto 2
-console.clear=()=>{};
-const originalError=console.error,originalWarn=console.warn,originalLog=console.log;
-console.error=()=>{};
-console.warn=()=>{};
-console.log=()=>{};
-window.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'){console.clear();}});
+// CONSOLE CLEANUP - Punto 2 (sin bloquear funcionalidad)
+const originalError=console.error,originalWarn=console.warn;
+let errorCount=0,warnCount=0;
+console.error=function(...args){
+  errorCount++;
+  if(errorCount>50)return; // Limita errores a 50
+  originalError.apply(console,args);
+};
+console.warn=function(...args){
+  warnCount++;
+  if(warnCount>50)return; // Limita warnings a 50
+  originalWarn.apply(console,args);
+};
 
 // ── STATE ──────────────────────────────────────────────────────────────────
 let USER=null,WALLETS=[],CW=null,ACCOUNTS=[],TXS=[],CATS=[],DEBTS=[],BUDGET=null;
